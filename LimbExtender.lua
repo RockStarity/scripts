@@ -174,7 +174,7 @@ function PlayerData:modifyLimbProperties(limb)
 	if espCompatible then
 		-- Create ESP-only part with NORMAL size for ESP to draw on
 		local espPart = Instance.new("Part")
-		espPart.Name = limb.Name
+		espPart.Name = limb.Name -- Original name for ESP detection
 		espPart.Parent = limb.Parent
 		espPart.Size = entry.OriginalSize -- NORMAL SIZE for ESP
 		espPart.Position = limb.Position
@@ -184,6 +184,12 @@ function PlayerData:modifyLimbProperties(limb)
 		espPart.Massless = true
 		espPart.Anchored = false
 		espPart.Archivable = false
+		espPart.TopSurface = Enum.SurfaceType.Smooth
+		espPart.BottomSurface = Enum.SurfaceType.Smooth
+		espPart.Material = Enum.Material.Plastic
+		
+		-- Make sure ESP part has proper properties for detection
+		espPart:SetAttribute("ESPVisible", true)
 		
 		entry.ESPPart = espPart
 		
