@@ -1,5 +1,56 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+--> [< Aimbot Variables >] <--
+local aimFov = 100
+local aiming = false
+local predictionStrength = 0.13
+local smoothing = 0.05
+local aimbotEnabled = false
+local wallCheck = true
+local teamCheck = false
+local aimAtNPC = true
+local killCheck = true
+
+local selectedButton = "MouseButton2"
+local buttonList = {"MouseButton1", "MouseButton2", "MouseButton3"}
+local buttonNames = {
+    MouseButton1 = "Left Click",
+    MouseButton2 = "Right Click",
+    MouseButton3 = "Middle Click"
+}
+
+local circleColor = Color3.fromRGB(255, 0, 0)
+local targetedCircleColor = Color3.fromRGB(0, 255, 0)
+local rainbowFov = false
+local hue = 0
+local rainbowSpeed = 0.005
+
+--> [< Кэш для оптимизации >] <--
+local npcCache = {}
+local lastNPCScan = 0
+local NPC_SCAN_INTERVAL = 0.5
+local playerCache = {}
+local lastPlayerScan = 0
+local PLAYER_SCAN_INTERVAL = 0.5
+
+--> [< FOV Circle >] <--
+local fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 2
+fovCircle.NumSides = 64
+fovCircle.Radius = aimFov
+fovCircle.Filled = false
+fovCircle.Transparency = 1
+fovCircle.Color = circleColor
+fovCircle.Visible = false
+fovCircle.ZIndex = 999
+
+local currentTarget = nil
+local currentTargetType = nil
 
 getgenv().le = getgenv().le or loadstring(game:HttpGet('https://raw.githubusercontent.com/RockStarity/scripts/refs/heads/main/LimbExtender.lua'))()
 local LimbExtender = getgenv().le
@@ -46,6 +97,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 local Settings = Window:CreateTab("Limbs", "scale-3d")
+local AimbotTab = Window:CreateTab("Aimbot", "crosshair")
 local Tab = Window:CreateTab("Sense", "eye")
 local Target = Window:CreateTab("Target", "crosshair")
 local Themes = Window:CreateTab("Themes", "palette")
@@ -333,3 +385,395 @@ LocalPlayer.CharacterAdded:Connect(characterAdded)
 if LocalPlayer.Character then
     characterAdded(LocalPlayer.Character)
 end
+
+--> [< Aimbot Functions >] <--
+local function isTargetAlive(target, targetType)
+    if not target then return false end
+    
+    if targetType == "player" then
+        if target.Character then
+            local humanoid = target.Character:FindFirstChild("Humanoid")
+            return humanoid ~= nil and humanoid.Health > 0
+        end
+    elseif targetType == "npc" then
+        if target and target.Parent then
+            local humanoid = target:FindFirstChild("Humanoid")
+            return humanoid ~= nil and humanoid.Health > 0
+        end
+    end
+    return false
+end
+
+local function getValidPlayers()
+    local validPlayers = {}
+    local currentTime = tick()
+    
+    if currentTime - lastPlayerScan > PLAYER_SCAN_INTERVAL then
+        playerCache = {}
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local humanoid = player.Character:FindFirstChild("Humanoid")
+                local head = player.Character:FindFirstChild("Head")
+                
+                if humanoid and head and humanoid.Health > 0 then
+                    if not teamCheck or player.Team ~= LocalPlayer.Team then
+                        table.insert(playerCache, player)
+                    end
+                end
+            end
+        end
+        lastPlayerScan = currentTime
+    end
+    
+    return playerCache
+end
+
+local function getValidNPCs()
+    local currentTime = tick()
+    
+    if currentTime - lastNPCScan > NPC_SCAN_INTERVAL then
+        npcCache = {}
+        local cameraPos = camera.CFrame.Position
+        local myName = LocalPlayer.Name
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") then
+                local humanoid = obj:FindFirstChild("Humanoid")
+                local head = obj:FindFirstChild("Head")
+                local hrp = obj:FindFirstChild("HumanoidRootPart")
+                
+                if humanoid and head and hrp and humanoid.Health > 0 then
+                    if obj.Name == myName then
+                        continue
+                    end
+                    
+                    local isPlayer = false
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        if player.Character == obj then
+                            isPlayer = true
+                            break
+                        end
+                    end
+                    
+                    if not isPlayer then
+                        local distance = (head.Position - cameraPos).Magnitude
+                        if distance < 400 then
+                            local size = obj:GetExtentsSize()
+                            if size.Magnitude < 20 and size.Magnitude > 2 then
+                                table.insert(npcCache, obj)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        lastNPCScan = currentTime
+    end
+    
+    return npcCache
+end
+
+local function checkWall(targetChar, targetHead)
+    if not targetHead or not wallCheck then return false end
+    
+    local origin = camera.CFrame.Position
+    local direction = (targetHead.Position - origin).unit * 500
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character, targetChar}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    
+    local raycast = workspace:Raycast(origin, direction, params)
+    return raycast ~= nil
+end
+
+local function findBestTarget()
+    local bestTarget = nil
+    local bestType = nil
+    local bestDistance = aimFov
+    local mousePos = UserInputService:GetMouseLocation()
+    local cameraPos = camera.CFrame.Position
+    
+    for _, player in ipairs(getValidPlayers()) do
+        local head = player.Character.Head
+        local headPos, onScreen = camera:WorldToViewportPoint(head.Position)
+        
+        if onScreen and headPos.Z > 0 and headPos.Z < 500 then
+            local screenPos = Vector2.new(headPos.X, headPos.Y)
+            local cursorDist = (screenPos - mousePos).Magnitude
+            
+            if cursorDist < bestDistance then
+                if not checkWall(player.Character, head) then
+                    bestDistance = cursorDist
+                    bestTarget = player
+                    bestType = "player"
+                end
+            end
+        end
+    end
+    
+    if aimAtNPC then
+        for _, npc in ipairs(getValidNPCs()) do
+            local head = npc:FindFirstChild("Head")
+            local headPos, onScreen = camera:WorldToViewportPoint(head.Position)
+            
+            if onScreen and headPos.Z > 0 and headPos.Z < 500 then
+                local screenPos = Vector2.new(headPos.X, headPos.Y)
+                local cursorDist = (screenPos - mousePos).Magnitude
+                
+                if cursorDist < bestDistance then
+                    if not checkWall(npc, head) then
+                        bestDistance = cursorDist
+                        bestTarget = npc
+                        bestType = "npc"
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestTarget, bestType
+end
+
+local function predictPosition(target, targetType)
+    if targetType == "player" then
+        if target.Character and target.Character:FindFirstChild("Head") and target.Character:FindFirstChild("HumanoidRootPart") then
+            local head = target.Character.Head
+            local hrp = target.Character.HumanoidRootPart
+            return head.Position + (hrp.Velocity * predictionStrength)
+        end
+    elseif targetType == "npc" then
+        if target:FindFirstChild("Head") and target:FindFirstChild("HumanoidRootPart") then
+            local head = target.Head
+            local hrp = target.HumanoidRootPart
+            return head.Position + (hrp.Velocity * predictionStrength)
+        end
+    end
+    return nil
+end
+
+local function aimAtTarget(target, targetType)
+    local pos = predictPosition(target, targetType)
+    if pos then
+        local cameraPos = camera.CFrame.Position
+        local distance = (pos - cameraPos).Magnitude
+        
+        if distance > 5 and distance < 500 then
+            local newCF = CFrame.new(cameraPos, pos)
+            camera.CFrame = camera.CFrame:Lerp(newCF, smoothing)
+            return true
+        end
+    end
+    return false
+end
+
+--> [< Aimbot Input Handling >] <--
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not aimbotEnabled or gp then return end
+    if input.UserInputType == Enum.UserInputType[selectedButton] then
+        aiming = not aiming
+        if not aiming then
+            currentTarget = nil
+            currentTargetType = nil
+        end
+    end
+end)
+
+--> [< Aimbot Main Loop >] <--
+local lastUpdate = 0
+local lastKillCheck = 0
+local TARGET_UPDATE_INTERVAL = 0.15
+local KILL_CHECK_INTERVAL = 0.1
+
+RunService.RenderStepped:Connect(function()
+    if aimbotEnabled then
+        local mousePos = UserInputService:GetMouseLocation()
+        fovCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+        fovCircle.Transparency = 0.7
+        fovCircle.Visible = true
+        fovCircle.Radius = aimFov
+        
+        if rainbowFov then
+            hue = (hue + rainbowSpeed) % 1
+            fovCircle.Color = Color3.fromHSV(hue, 1, 1)
+        else
+            fovCircle.Color = (aiming and currentTarget) and targetedCircleColor or circleColor
+        end
+        
+        if aiming then
+            local now = tick()
+            
+            if killCheck and currentTarget and now - lastKillCheck > KILL_CHECK_INTERVAL then
+                if not isTargetAlive(currentTarget, currentTargetType) then
+                    currentTarget = nil
+                    currentTargetType = nil
+                end
+                lastKillCheck = now
+            end
+            
+            if not currentTarget and now - lastUpdate > TARGET_UPDATE_INTERVAL then
+                currentTarget, currentTargetType = findBestTarget()
+                lastUpdate = now
+            end
+            
+            if currentTarget and currentTargetType then
+                aimAtTarget(currentTarget, currentTargetType)
+            end
+        else
+            currentTarget = nil
+            currentTargetType = nil
+        end
+    else
+        fovCircle.Visible = false
+        aiming = false
+        currentTarget = nil
+        currentTargetType = nil
+    end
+end)
+
+--> [< Aimbot UI Elements >] <--
+local aimbotToggle = AimbotTab:CreateToggle({
+    Name = "Aimbot",
+    CurrentValue = false,
+    Flag = "Aimbot",
+    Callback = function(Value)
+        aimbotEnabled = Value
+        fovCircle.Visible = Value
+        if not Value then
+            aiming = false
+            currentTarget = nil
+            currentTargetType = nil
+        end
+    end
+})
+
+local killCheckToggle = AimbotTab:CreateToggle({
+    Name = "Kill Check (Auto Switch)",
+    CurrentValue = true,
+    Flag = "KillCheck",
+    Callback = function(Value)
+        killCheck = Value
+        Rayfield:Notify({
+            Title = "Kill Check",
+            Content = Value and "✅ Auto switch target on kill" or "❌ Keep aiming at dead targets",
+            Duration = 2
+        })
+    end
+})
+
+local aimAtNPCToggle = AimbotTab:CreateToggle({
+    Name = "Aim at NPC",
+    CurrentValue = true,
+    Flag = "AimAtNPC",
+    Callback = function(Value)
+        aimAtNPC = Value
+        currentTarget = nil
+        currentTargetType = nil
+        Rayfield:Notify({
+            Title = "NPC Aim",
+            Content = Value and "✅ Aiming at NPCs" or "❌ NPCs ignored",
+            Duration = 1.5
+        })
+    end
+})
+
+local buttonDropdown = AimbotTab:CreateDropdown({
+    Name = "Activation Button",
+    Options = buttonList,
+    CurrentOption = {selectedButton},
+    Flag = "ActivationButton",
+    Callback = function(Options)
+        selectedButton = Options[1]
+        Rayfield:Notify({
+            Title = "Button Changed",
+            Content = "Aim button: " .. buttonNames[selectedButton],
+            Duration = 1.5
+        })
+    end
+})
+
+AimbotTab:CreateDivider()
+
+local smoothingSlider = AimbotTab:CreateSlider({
+    Name = "Smoothing",
+    Range = {0, 100},
+    Increment = 1,
+    CurrentValue = 5,
+    Flag = "Smoothing",
+    Callback = function(Value)
+        smoothing = 1 - (Value / 100)
+    end,
+})
+
+local predictionSlider = AimbotTab:CreateSlider({
+    Name = "Prediction",
+    Range = {0, 0.2},
+    Increment = 0.001,
+    CurrentValue = 0.13,
+    Flag = "PredictionStrength",
+    Callback = function(Value)
+        predictionStrength = Value
+    end,
+})
+
+AimbotTab:CreateDivider()
+
+local wallCheckToggle = AimbotTab:CreateToggle({
+    Name = "Wall Check",
+    CurrentValue = true,
+    Flag = "WallCheck",
+    Callback = function(Value)
+        wallCheck = Value
+    end
+})
+
+local teamCheckToggle = AimbotTab:CreateToggle({
+    Name = "Team Check",
+    CurrentValue = false,
+    Flag = "TeamCheck",
+    Callback = function(Value)
+        teamCheck = Value
+        currentTarget = nil
+        currentTargetType = nil
+    end
+})
+
+AimbotTab:CreateDivider()
+
+local aimbotFov = AimbotTab:CreateSlider({
+    Name = "Aimbot Fov",
+    Range = {0, 500},
+    Increment = 1,
+    CurrentValue = 100,
+    Flag = "AimbotFov",
+    Callback = function(Value)
+        aimFov = Value
+    end,
+})
+
+local circleColorPicker = AimbotTab:CreateColorPicker({
+    Name = "Fov Color",
+    Color = circleColor,
+    Callback = function(Color)
+        circleColor = Color
+        if not rainbowFov then
+            fovCircle.Color = Color
+        end
+    end
+})
+
+local targetedCircleColorPicker = AimbotTab:CreateColorPicker({
+    Name = "Targeted Color",
+    Color = targetedCircleColor,
+    Callback = function(Color)
+        targetedCircleColor = Color
+    end
+})
+
+local rainbowFovToggle = AimbotTab:CreateToggle({
+    Name = "Rainbow Fov",
+    CurrentValue = false,
+    Flag = "RainbowFov",
+    Callback = function(Value)
+        rainbowFov = Value
+    end
+})
