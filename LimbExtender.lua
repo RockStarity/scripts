@@ -5,7 +5,7 @@ local DEFAULTS = {
 	TOGGLE = "L",
 	TARGET_LIMB = "HumanoidRootPart",
 	LIMB_SIZE = 15,
-	LIMB_TRANSPARENCY = 1.0,
+	LIMB_TRANSPARENCY = 0.9,
 	LIMB_CAN_COLLIDE = false,
 	ESP_COMPATIBLE = true,
 	MOBILE_BUTTON = true,
@@ -122,6 +122,7 @@ function PlayerData:saveLimbProperties(limb)
 		OriginalTransparency = limb.Transparency,
 		OriginalCanCollide = limb.CanCollide,
 		OriginalMassless = limb.Massless,
+		OriginalName = limb.Name,
 		SizeConnection = nil,
 		CollisionConnection = nil,
 	}
@@ -139,6 +140,11 @@ function PlayerData:restoreLimbProperties(limb)
 	-- Remove ESP part if it exists
 	if p.ESPPart and p.ESPPart.Parent then
 		p.ESPPart:Destroy()
+	end
+	
+	-- Restore original name if it was changed for ESP compatibility
+	if p.OriginalName then
+		limb.Name = p.OriginalName
 	end
 	
 	if limb and limb.Parent then
@@ -165,30 +171,44 @@ function PlayerData:modifyLimbProperties(limb)
 	local transparency = parent._settings.LIMB_TRANSPARENCY
 	local espCompatible = parent._settings.ESP_COMPATIBLE
 
-	-- Create ESP compatible part if needed
 	if espCompatible then
-		local espPart = limb:Clone()
-		espPart.Name = "_ESPPart_" .. limb.Name
+		-- Create ESP-only part that's invisible to players but visible to ESP
+		local espPart = Instance.new("Part")
+		espPart.Name = limb.Name -- Same name for ESP detection
 		espPart.Parent = limb.Parent
 		espPart.Size = entry.OriginalSize
-		espPart.Transparency = 1
+		espPart.Position = limb.Position
+		espPart.Orientation = limb.Orientation
+		espPart.Transparency = 1 -- Invisible to players
 		espPart.CanCollide = false
 		espPart.Massless = true
 		espPart.Anchored = false
+		espPart.Archivable = false
+		espPart.TopSurface = Enum.SurfaceType.Smooth
+		espPart.BottomSurface = Enum.SurfaceType.Smooth
+		espPart.Material = Enum.Material.Plastic
+		
+		-- Copy important properties for ESP detection
+		if limb:FindFirstChild("Humanoid") then
+			local humanoidClone = limb.Humanoid:Clone()
+			humanoidClone.Parent = espPart
+		end
+		
 		entry.ESPPart = espPart
 		
-		-- Weld the ESP part to the original limb
+		-- Weld ESP part to original limb
 		local weld = Instance.new("WeldConstraint")
 		weld.Part0 = limb
 		weld.Part1 = espPart
 		weld.Parent = espPart
+		
+		-- Make original limb invisible to ESP by changing its name temporarily
+		limb.Name = "_Modified_" .. limb.Name
+		entry.OriginalName = entry.OriginalSize -- Store original name reference
 	end
 
 	entry.SizeConnection = watchProperty(limb, "Size", function(l)
 		l.Size = newSize
-		if espCompatible and entry.ESPPart then
-			entry.ESPPart.Size = entry.OriginalSize
-		end
 	end)
 	
 	entry.TransparencyConnection = watchProperty(limb, "Transparency", function(l)
