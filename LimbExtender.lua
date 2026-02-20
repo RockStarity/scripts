@@ -6,6 +6,7 @@ local DEFAULTS = {
 	TARGET_LIMB = "HumanoidRootPart",
 	LIMB_SIZE = 15,
 	LIMB_TRANSPARENCY = 0.9,
+	VISUAL_TRANSPARENCY = 1,
 	LIMB_CAN_COLLIDE = false,
 	MOBILE_BUTTON = true,
 	LISTEN_FOR_INPUT = true,
@@ -156,13 +157,14 @@ function PlayerData:modifyLimbProperties(limb)
 	local newSize = Vector3.new(sizeVal, sizeVal, sizeVal)
 	local canCollide = parent._settings.LIMB_CAN_COLLIDE
 	local transparency = parent._settings.LIMB_TRANSPARENCY
+	local visualTransparency = parent._settings.VISUAL_TRANSPARENCY
 
 	entry.SizeConnection = watchProperty(limb, "Size", function(l)
 		l.Size = newSize
 	end)
 	
 	entry.TransparencyConnection = watchProperty(limb, "Transparency", function(l)
-		l.Transparency = transparency
+		l.Transparency = visualTransparency
 	end)
 	
 	entry.CollisionConnection = watchProperty(limb, "CanCollide", function(l)
@@ -171,7 +173,7 @@ function PlayerData:modifyLimbProperties(limb)
 
 	if limb and limb.Parent then
 		limb.Size = newSize
-		limb.Transparency = parent._settings.LIMB_TRANSPARENCY
+		limb.Transparency = visualTransparency
 		limb.CanCollide = canCollide
 		if parent._settings.TARGET_LIMB ~= "HumanoidRootPart" then
 			limb.Massless = true
