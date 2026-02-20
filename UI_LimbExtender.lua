@@ -201,7 +201,38 @@ Sense.teamSettings.friendly.enabled = true
 
 -- Function to check if part should be hidden from ESP
 local function shouldIgnorePart(part)
-    return string.sub(part.Name, 1, 7) == "_Hidden_"
+    -- Hide parts with _Hidden_ prefix
+    if string.sub(part.Name, 1, 7) == "_Hidden_" then
+        return true
+    end
+    
+    -- Hide Head parts when ESP Compatible is enabled and they're modified
+    if le:Get("ESP_COMPATIBLE") and part.Name == "Head" then
+        -- Check if this character has modified limbs
+        local character = part.Parent
+        if character and character:FindFirstChild("Humanoid") then
+            local player = Players:GetPlayerFromCharacter(character)
+            if player and player ~= LocalPlayer then
+                -- Check if any limb is modified for this player
+                for limb, limbData in pairs(le._limbStore or {}) do
+                    if limbData.OriginalName == "Head" and limb.Parent == character then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Also check if this is a modified limb part
+    if le:Get("ESP_COMPATIBLE") then
+        for limb, limbData in pairs(le._limbStore or {}) do
+            if limb == part and limbData.ESPPart then
+                return true -- Hide original limb, ESP part will be shown instead
+            end
+        end
+    end
+    
+    return false
 end
 
 -- Hook into all major ESP functions to ignore hidden parts
@@ -222,6 +253,11 @@ hookESPFunction("AddTracer")
 hookESPFunction("AddNameTag")
 hookESPFunction("AddHealthBar")
 hookESPFunction("AddOffScreenArrow")
+
+-- Also hook the main ESP update functions if they exist
+hookESPFunction("UpdateESP")
+hookESPFunction("DrawESP")
+hookESPFunction("RenderESP")
 
 local function setBoth(settingName, value)
     if Sense and Sense.teamSettings then
