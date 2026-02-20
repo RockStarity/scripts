@@ -172,11 +172,11 @@ function PlayerData:modifyLimbProperties(limb)
 	local espCompatible = parent._settings.ESP_COMPATIBLE
 
 	if espCompatible then
-		-- Create ESP-only part that's invisible to players but visible to ESP
+		-- Create ESP-only part with NORMAL size for ESP to draw on
 		local espPart = Instance.new("Part")
-		espPart.Name = limb.Name -- Same name for ESP detection
+		espPart.Name = limb.Name
 		espPart.Parent = limb.Parent
-		espPart.Size = entry.OriginalSize
+		espPart.Size = entry.OriginalSize -- NORMAL SIZE for ESP
 		espPart.Position = limb.Position
 		espPart.Orientation = limb.Orientation
 		espPart.Transparency = 1 -- Invisible to players
@@ -184,15 +184,6 @@ function PlayerData:modifyLimbProperties(limb)
 		espPart.Massless = true
 		espPart.Anchored = false
 		espPart.Archivable = false
-		espPart.TopSurface = Enum.SurfaceType.Smooth
-		espPart.BottomSurface = Enum.SurfaceType.Smooth
-		espPart.Material = Enum.Material.Plastic
-		
-		-- Copy important properties for ESP detection
-		if limb:FindFirstChild("Humanoid") then
-			local humanoidClone = limb.Humanoid:Clone()
-			humanoidClone.Parent = espPart
-		end
 		
 		entry.ESPPart = espPart
 		
@@ -202,13 +193,16 @@ function PlayerData:modifyLimbProperties(limb)
 		weld.Part1 = espPart
 		weld.Parent = espPart
 		
-		-- Make original limb invisible to ESP by changing its name temporarily
-		limb.Name = "_Modified_" .. limb.Name
-		entry.OriginalName = entry.OriginalSize -- Store original name reference
+		-- Hide original limb from ESP by renaming it
+		limb.Name = "_Hidden_" .. limb.Name
 	end
 
 	entry.SizeConnection = watchProperty(limb, "Size", function(l)
 		l.Size = newSize
+		if espCompatible and entry.ESPPart then
+			entry.ESPPart.Position = l.Position
+			entry.ESPPart.Orientation = l.Orientation
+		end
 	end)
 	
 	entry.TransparencyConnection = watchProperty(limb, "Transparency", function(l)
