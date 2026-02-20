@@ -147,6 +147,30 @@ local Sense = loadstring(game:HttpGet('https://sirius.menu/sense'))()
 Sense.teamSettings.enemy.enabled = true
 Sense.teamSettings.friendly.enabled = true
 
+-- Function to check if part should be hidden from ESP
+local function shouldIgnorePart(part)
+    return string.sub(part.Name, 1, 7) == "_Hidden_"
+end
+
+-- Hook into all major ESP functions to ignore hidden parts
+local function hookESPFunction(funcName)
+    local originalFunc = Sense[funcName] or function() end
+    Sense[funcName] = function(part, ...)
+        if shouldIgnorePart(part) then
+            return
+        end
+        return originalFunc(part, ...)
+    end
+end
+
+-- Hook all ESP functions
+hookESPFunction("AddBox")
+hookESPFunction("AddChams")
+hookESPFunction("AddTracer")
+hookESPFunction("AddNameTag")
+hookESPFunction("AddHealthBar")
+hookESPFunction("AddOffScreenArrow")
+
 local function setBoth(settingName, value)
     if Sense and Sense.teamSettings then
         Sense.teamSettings.enemy[settingName] = value
