@@ -97,8 +97,8 @@ Settings:CreateDivider()
 local toggleSettings = {
     { method = "Toggle", name = "Team Check", flag = "TEAM_CHECK", tab = Settings, value = le:Get("TEAM_CHECK") },
     { method = "Toggle", name = "ForceField Check", flag = "FORCEFIELD_CHECK", tab = Settings, value = le:Get("FORCEFIELD_CHECK") },
+    { method = "Toggle", name = "ESP Compatible", flag = "ESP_COMPATIBLE", tab = Settings, value = le:Get("ESP_COMPATIBLE") },
     { method = "Toggle", name = "Limb Collisions", flag = "LIMB_CAN_COLLIDE", tab = Settings, value = le:Get("LIMB_CAN_COLLIDE"), createDivider = true },
-    { method = "Slider", name = "Visual Transparency", flag = "VISUAL_TRANSPARENCY", tab = Settings, range = {0,1}, increment = 0.1, value = le:Get("VISUAL_TRANSPARENCY") },
     { method = "Slider", name = "Limb Transparency", flag = "LIMB_TRANSPARENCY", tab = Settings, range = {0,1}, increment = 0.1, value = le:Get("LIMB_TRANSPARENCY") },
     { method = "Slider", name = "Limb Size", flag = "LIMB_SIZE", tab = Settings, range = {5,50}, increment = 0.5, value = le:Get("LIMB_SIZE"), createDivider = true },
 }
