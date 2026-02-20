@@ -5,9 +5,9 @@ local DEFAULTS = {
 	TOGGLE = "L",
 	TARGET_LIMB = "HumanoidRootPart",
 	LIMB_SIZE = 15,
-	LIMB_TRANSPARENCY = 0.9,
-	VISUAL_TRANSPARENCY = 1,
+	LIMB_TRANSPARENCY = 1.0,
 	LIMB_CAN_COLLIDE = false,
+	ESP_COMPATIBLE = true,
 	MOBILE_BUTTON = true,
 	LISTEN_FOR_INPUT = true,
 	TEAM_CHECK = true,
@@ -135,6 +135,12 @@ function PlayerData:restoreLimbProperties(limb)
 	if p.SizeConnection and typeof(p.SizeConnection) == "RBXScriptConnection" then p.SizeConnection:Disconnect() end
 	if p.TransparencyConnection and typeof(p.TransparencyConnection) == "RBXScriptConnection" then p.TransparencyConnection:Disconnect() end
 	if p.CollisionConnection and typeof(p.CollisionConnection) == "RBXScriptConnection" then p.CollisionConnection:Disconnect() end
+	
+	-- Remove ESP part if it exists
+	if p.ESPPart and p.ESPPart.Parent then
+		p.ESPPart:Destroy()
+	end
+	
 	if limb and limb.Parent then
 		limb.Size = p.OriginalSize
 		limb.Transparency = p.OriginalTransparency
@@ -157,14 +163,36 @@ function PlayerData:modifyLimbProperties(limb)
 	local newSize = Vector3.new(sizeVal, sizeVal, sizeVal)
 	local canCollide = parent._settings.LIMB_CAN_COLLIDE
 	local transparency = parent._settings.LIMB_TRANSPARENCY
-	local visualTransparency = parent._settings.VISUAL_TRANSPARENCY
+	local espCompatible = parent._settings.ESP_COMPATIBLE
+
+	-- Create ESP compatible part if needed
+	if espCompatible then
+		local espPart = limb:Clone()
+		espPart.Name = "_ESPPart_" .. limb.Name
+		espPart.Parent = limb.Parent
+		espPart.Size = entry.OriginalSize
+		espPart.Transparency = 1
+		espPart.CanCollide = false
+		espPart.Massless = true
+		espPart.Anchored = false
+		entry.ESPPart = espPart
+		
+		-- Weld the ESP part to the original limb
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = limb
+		weld.Part1 = espPart
+		weld.Parent = espPart
+	end
 
 	entry.SizeConnection = watchProperty(limb, "Size", function(l)
 		l.Size = newSize
+		if espCompatible and entry.ESPPart then
+			entry.ESPPart.Size = entry.OriginalSize
+		end
 	end)
 	
 	entry.TransparencyConnection = watchProperty(limb, "Transparency", function(l)
-		l.Transparency = visualTransparency
+		l.Transparency = transparency
 	end)
 	
 	entry.CollisionConnection = watchProperty(limb, "CanCollide", function(l)
@@ -173,7 +201,7 @@ function PlayerData:modifyLimbProperties(limb)
 
 	if limb and limb.Parent then
 		limb.Size = newSize
-		limb.Transparency = visualTransparency
+		limb.Transparency = transparency
 		limb.CanCollide = canCollide
 		if parent._settings.TARGET_LIMB ~= "HumanoidRootPart" then
 			limb.Massless = true
