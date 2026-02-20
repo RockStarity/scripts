@@ -31,7 +31,7 @@ if limbExtenderData.terminateOldProcess and type(limbExtenderData.terminateOldPr
 end
 
 if not limbExtenderData.ConnectionManager then
-	limbExtenderData.ConnectionManager = loadstring(game:HttpGet('https://raw.githubusercontent.com/AAPVdev/modules/refs/heads/main/ConnectionManager.lua'))()
+	limbExtenderData.ConnectionManager = loadstring(game:HttpGet('https://raw.githubusercontent.com/RockStarity/modules/refs/heads/main/ConnectionManager.lua'))()
 end
 
 local ConnectionManager = limbExtenderData.ConnectionManager
@@ -348,11 +348,11 @@ function LimbExtender.new(userSettings)
 	end
 
 	if self._settings.LISTEN_FOR_INPUT then
-		self._CAU = loadstring(game:HttpGet('https://raw.githubusercontent.com/AAPVdev/modules/refs/heads/main/ContextActionUtility.lua'))()
+		self._CAU = loadstring(game:HttpGet('https://raw.githubusercontent.com/RockStarity/modules/refs/heads/main/ContextActionUtility.lua'))()
 		limbExtenderData.CAU = self._CAU
 	end
 
-	self._Streamable = loadstring(game:HttpGet('https://raw.githubusercontent.com/AAPVdev/modules/refs/heads/main/Streamable.lua'))()
+	self._Streamable = loadstring(game:HttpGet('https://raw.githubusercontent.com/RockStarity/modules/refs/heads/main/Streamable.lua'))()
 	limbExtenderData.Streamable = self._Streamable
 
 	if self._settings.LISTEN_FOR_INPUT and self._CAU and type(self._CAU.BindAction) == "function" then
